@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Subir Comprobante</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f0f2f5; margin: 0; padding: 16px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+    .card { background: #ffffff; width: 100%; max-width: 420px; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); }
+    h1 { font-size: 22px; color: #1a73e8; margin-top: 0; margin-bottom: 20px; text-align: center; }
+    label { font-weight: 600; font-size: 14px; color: #333; display: block; margin-top: 16px; margin-bottom: 6px; }
+    input[type="text"] { width: 100%; padding: 14px; font-size: 16px; border: 1px solid #ccc; border-radius: 10px; outline: none; }
+    input[type="text"]:focus { border-color: #1a73e8; }
+    
+    .file-input-wrapper {
+      margin-top: 6px;
+      border: 2px dashed #1a73e8;
+      background: #f8fbff;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .file-input-wrapper span { font-weight: 600; color: #1a73e8; font-size: 15px; }
+    input[type="file"] { display: none; }
+    
+    #previewImg { width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; margin-top: 12px; display: none; background: #fafafa; border: 1px solid #eee; }
+    
+    .btn-submit {
+      width: 100%;
+      background: #25D366;
+      color: white;
+      border: none;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 24px;
+      box-shadow: 0 4px 12px rgba(37, 211, 102, 0.25);
+    }
+    .btn-submit:disabled { background: #b8e2c5; cursor: not-allowed; box-shadow: none; }
+    
+    .status-box { margin-top: 14px; font-size: 14px; text-align: center; font-weight: 600; min-height: 20px; }
+    .status-loading { color: #1a73e8; }
+    .status-success { color: #2e7d32; }
+    .status-error { color: #d32f2f; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>Comprobante de Venta</h1>
+
+    <label for="clienteInput">1. Cliente:</label>
+    <input list="listaClientes" id="clienteInput" placeholder="Escribe el nombre..." oninput="manejarCliente()" autocomplete="off">
+    <datalist id="listaClientes"></datalist>
+
+    <label>2. Foto del comprobante:</label>
+    <label class="file-input-wrapper" for="fotoInput">
+      <span id="labelTxt">📷 Tocar para tomar foto</span>
+      <input type="file" id="fotoInput" accept="image/*" capture="environment" onchange="procesarImagen(event)">
+    </label>
+    <img id="previewImg" alt="Vista previa">
+
+    <button id="btnEnviar" class="btn-submit" onclick="enviarComprobante()" disabled>Subir y Enviar por WhatsApp</button>
+    <div id="statusBox" class="status-box"></div>
+  </div>
+
+  <script>
+    // PEGA AQUÍ LA URL DE TU APLICACIÓN WEB DE APPS SCRIPT (/exec)
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyCj_v-jB0oZj6scGHg1pZrTl7Z1qm1DRBU6XmmpqQyPkANNqZYt_tFBz4ygJGJk7TgFg/exec";
+
+    let listaClientes = [];
+    let telefonoSeleccionado = "";
+    let fotoBase64Optimizado = "";
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // Restaurar cliente si la memoria reinició la ventana
+      const clienteGuardado = localStorage.getItem('cliente_temp');
+      if (clienteGuardado) {
+        document.getElementById('clienteInput').value = clienteGuardado;
+      }
+      cargarClientesDesdeScript();
+    });
+
+    async function cargarClientesDesdeScript() {
+      if (SCRIPT_URL === "URL_DE_TU_SCRIPT_EXEC_AQUI") {
+        mostrarEstado("Configura la URL de Apps Script en SCRIPT_URL", "status-error");
+        return;
+      }
+      try {
+        mostrarEstado("Cargando lista de clientes...", "status-loading");
+        const res = await fetch(SCRIPT_URL);
+        const data = await res.json();
+        if (data.status === "success" && data.clientes) {
+          listaClientes = data.clientes;
+          const datalist = document.getElementById('listaClientes');
+          datalist.innerHTML = "";
+          listaClientes.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.nombre;
+            datalist.appendChild(opt);
+          });
+          manejarCliente();
+          mostrarEstado("", "");
+        }
+      } catch (err) {
+        mostrarEstado("Aviso: No se pudo conectar a la lista. Ingresa el nombre manual.", "status-error");
+      }
+    }
+
+    function manejarCliente() {
+      const val = document.getElementById('clienteInput').value.trim();
+      localStorage.setItem('cliente_temp', val);
+      const match = listaClientes.find(c => c.nombre.toLowerCase() === val.toLowerCase());
+      telefonoSeleccionado = match ? match.telefono : "";
+      validarFormulario();
+    }
+
+    // Compresión en cliente para reducir a ~150KB y no saturar la red 4G ni la RAM
+    function procesarImagen(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      mostrarEstado("Optimizando imagen...", "status-loading");
+      const reader = new FileReader();
+
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = function() {
+          const maxDim = 1200;
+          let w = img.width;
+          let h = img.height;
+
+          if (w > h && w > maxDim) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else if (h > maxDim) {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+
+          // Calidad 70%: muy liviana (<150KB) y texto de recibo perfectamente legible
+          fotoBase64Optimizado = canvas.toDataURL('image/jpeg', 0.70);
+
+          const preview = document.getElementById('previewImg');
+          preview.src = fotoBase64Optimizado;
+          preview.style.display = 'block';
+
+          document.getElementById('labelTxt').innerText = "✓ Cambiar foto";
+          mostrarEstado("✓ Foto lista", "status-success");
+          validarFormulario();
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function validarFormulario() {
+      const clienteValido = document.getElementById('clienteInput').value.trim().length > 0;
+      const fotoValida = fotoBase64Optimizado.length > 0;
+      document.getElementById('btnEnviar').disabled = !(clienteValido && fotoValida);
+    }
+
+    // Envío con reintentos automáticos para evitar caídas de red móvil (ERR_NETWORK_CHANGED)
+    async function enviarComprobante() {
+      const btn = document.getElementById('btnEnviar');
+      const cliente = document.getElementById('clienteInput').value.trim();
+
+      btn.disabled = true;
+      mostrarEstado("Subiendo comprobante a Drive...", "status-loading");
+
+      const payload = {
+        cliente: cliente,
+        telefono: telefonoSeleccionado,
+        fotoBase64: fotoBase64Optimizado
+      };
+
+      const MAX_INTENTOS = 3;
+      let exito = false;
+
+      for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+        try {
+          if (intento > 1) {
+            mostrarEstado(`Reintentando conexión (${intento}/${MAX_INTENTOS})...`, "status-loading");
+          }
+
+          // Se usa text/plain para evitar que Apps Script bloquee con preflight OPTIONS de CORS
+          const resp = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
+
+          const resultado = await resp.json();
+
+          if (resultado.status === "success") {
+            exito = true;
+            mostrarEstado("✓ Guardado. Abriendo WhatsApp...", "status-success");
+            localStorage.removeItem('cliente_temp');
+
+            // Abrir WhatsApp directamente
+            window.location.href = resultado.urlWhatsApp;
+
+            setTimeout(() => {
+              // Limpiar para el siguiente
+              document.getElementById('clienteInput').value = "";
+              document.getElementById('previewImg').style.display = "none";
+              document.getElementById('labelTxt').innerText = "📷 Tocar para tomar foto";
+              fotoBase64Optimizado = "";
+              btn.disabled = true;
+              mostrarEstado("", "");
+            }, 2500);
+
+            break;
+          } else {
+            throw new Error(resultado.message || "Error en el servidor");
+          }
+
+        } catch (err) {
+          console.warn(`Fallo intento ${intento}:`, err);
+          if (intento === MAX_INTENTOS) {
+            mostrarEstado("Error al subir comprobante. Revisa tu conexión e intenta de nuevo.", "status-error");
+            btn.disabled = false;
+          } else {
+            await new Promise(r => setTimeout(r, 1200)); // Espera antes de reintentar
+          }
+        }
+      }
+    }
+
+    function mostrarEstado(txt, clase) {
+      const box = document.getElementById('statusBox');
+      box.className = "status-box " + clase;
+      box.innerText = txt;
+    }
+  </script>
+</body>
+</html>
