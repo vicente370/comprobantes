@@ -3,240 +3,286 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Subir Comprobante</title>
+  <title>Registro de Comprobantes</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: #f0f2f5; margin: 0; padding: 16px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
-    .card { background: #ffffff; width: 100%; max-width: 420px; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); }
-    h1 { font-size: 22px; color: #1a73e8; margin-top: 0; margin-bottom: 20px; text-align: center; }
-    label { font-weight: 600; font-size: 14px; color: #333; display: block; margin-top: 16px; margin-bottom: 6px; }
-    input[type="text"] { width: 100%; padding: 14px; font-size: 16px; border: 1px solid #ccc; border-radius: 10px; outline: none; }
+    body { background: #f0f2f5; margin: 0; padding: 16px; display: flex; justify-content: center; }
+    .card { background: #ffffff; width: 100%; max-width: 440px; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h2 { color: #1a73e8; margin: 0 0 16px 0; text-align: center; font-size: 20px; }
+    label { font-weight: 600; font-size: 13px; color: #444; margin-top: 12px; display: block; }
+    input[type="text"] { width: 100%; padding: 12px; border: 1.5px solid #dcdfe6; border-radius: 10px; font-size: 15px; margin-top: 6px; outline: none; }
     input[type="text"]:focus { border-color: #1a73e8; }
     
-    .file-input-wrapper {
-      margin-top: 6px;
+    /* Contenedor de Cámara en pantalla */
+    .cam-container {
+      margin-top: 10px;
       border: 2px dashed #1a73e8;
-      background: #f8fbff;
       border-radius: 12px;
-      padding: 20px;
-      text-align: center;
-      cursor: pointer;
+      background: #111;
+      position: relative;
+      overflow: hidden;
+      min-height: 240px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+    }
+    video#videoStream {
+      width: 100%;
+      height: 260px;
+      object-fit: cover;
+      display: none;
+    }
+    img#fotoPreview {
+      width: 100%;
+      height: 260px;
+      object-fit: contain;
+      background: #000;
+      display: none;
+    }
+    canvas#canvasSnapshot { display: none; }
+    
+    .cam-btn {
+      padding: 12px 20px;
+      border-radius: 25px;
+      border: none;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
       gap: 8px;
     }
-    .file-input-wrapper span { font-weight: 600; color: #1a73e8; font-size: 15px; }
-    input[type="file"] { display: none; }
-    
-    #previewImg { width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; margin-top: 12px; display: none; background: #fafafa; border: 1px solid #eee; }
-    
-    .btn-submit {
+    .btn-abrir { background: #1a73e8; color: white; margin: 20px 0; }
+    .btn-disparo {
+      position: absolute;
+      bottom: 12px;
+      background: #ffffff;
+      color: #1a73e8;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      display: none;
+    }
+    .btn-repetir {
+      position: absolute;
+      bottom: 12px;
+      background: rgba(255,255,255,0.9);
+      color: #333;
+      display: none;
+    }
+
+    button#btnEnviar {
       width: 100%;
       background: #25D366;
       color: white;
       border: none;
-      padding: 16px;
-      border-radius: 12px;
+      border-radius: 10px;
+      padding: 15px;
       font-size: 16px;
       font-weight: 700;
+      margin-top: 18px;
       cursor: pointer;
-      margin-top: 24px;
-      box-shadow: 0 4px 12px rgba(37, 211, 102, 0.25);
+      transition: background 0.2s;
     }
-    .btn-submit:disabled { background: #b8e2c5; cursor: not-allowed; box-shadow: none; }
-    
-    .status-box { margin-top: 14px; font-size: 14px; text-align: center; font-weight: 600; min-height: 20px; }
-    .status-loading { color: #1a73e8; }
-    .status-success { color: #2e7d32; }
-    .status-error { color: #d32f2f; }
+    button#btnEnviar:disabled { background: #c2eed1; cursor: not-allowed; }
+
+    #statusBox {
+      margin-top: 14px;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: center;
+      display: none;
+      font-weight: 600;
+    }
+    .status-info { background: #e8f0fe; color: #1a73e8; display: block !important; }
+    .status-ok { background: #e6f4ea; color: #137333; display: block !important; }
+    .status-error { background: #fce8e6; color: #c5221f; display: block !important; }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <h1>Comprobante de Venta</h1>
+    <h2>Registro de Comprobante</h2>
 
     <label for="clienteInput">1. Cliente:</label>
-    <input list="listaClientes" id="clienteInput" placeholder="Escribe el nombre..." oninput="manejarCliente()" autocomplete="off">
+    <input list="listaClientes" id="clienteInput" placeholder="Buscar o escribir cliente..." oninput="seleccionarCliente()">
     <datalist id="listaClientes"></datalist>
 
     <label>2. Foto del comprobante:</label>
-    <label class="file-input-wrapper" for="fotoInput">
-      <span id="labelTxt">📷 Tocar para tomar foto</span>
-      <input type="file" id="fotoInput" accept="image/*" capture="environment" onchange="procesarImagen(event)">
-    </label>
-    <img id="previewImg" alt="Vista previa">
+    <div class="cam-container" id="camBox">
+      <button type="button" class="cam-btn btn-abrir" id="btnIniciar" onclick="abrirCamara()">📷 Encender Cámara</button>
+      <video id="videoStream" autoplay playsinline muted></video>
+      <img id="fotoPreview" alt="Vista previa">
+      <canvas id="canvasSnapshot"></canvas>
+      <button type="button" class="cam-btn btn-disparo" id="btnCapturar" onclick="capturarFoto()">⚪ Tomar Foto</button>
+      <button type="button" class="cam-btn btn-repetir" id="btnRepetir" onclick="reiniciarCamara()">🔄 Repetir</button>
+    </div>
 
-    <button id="btnEnviar" class="btn-submit" onclick="enviarComprobante()" disabled>Subir y Enviar por WhatsApp</button>
-    <div id="statusBox" class="status-box"></div>
+    <button type="button" id="btnEnviar" disabled onclick="enviar()">Guardar y Enviar por WhatsApp</button>
+    <div id="statusBox"></div>
   </div>
 
   <script>
-    // PEGA AQUÍ LA URL DE TU APLICACIÓN WEB DE APPS SCRIPT (/exec)
+    // ⚠️ REEMPLAZA ESTA URL CON LA TUYA DE APPS SCRIPT (/exec)
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyCj_v-jB0oZj6scGHg1pZrTl7Z1qm1DRBU6XmmpqQyPkANNqZYt_tFBz4ygJGJk7TgFg/exec";
 
-    let listaClientes = [];
-    let telefonoSeleccionado = "";
-    let fotoBase64Optimizado = "";
+    let clientes = [];
+    let telefonoActual = "";
+    let base64Comprimido = "";
+    let streamActual = null;
 
-    window.addEventListener('DOMContentLoaded', () => {
-      // Restaurar cliente si la memoria reinició la ventana
-      const clienteGuardado = localStorage.getItem('cliente_temp');
-      if (clienteGuardado) {
-        document.getElementById('clienteInput').value = clienteGuardado;
+    window.onload = function() {
+      // Restaurar cliente si hubiera algún refresco
+      const guardado = localStorage.getItem('cliente_temp');
+      if (guardado) {
+        document.getElementById('clienteInput').value = guardado;
       }
-      cargarClientesDesdeScript();
-    });
+      cargarListaClientes();
+    };
 
-    async function cargarClientesDesdeScript() {
-      if (SCRIPT_URL === "URL_DE_TU_SCRIPT_EXEC_AQUI") {
-        mostrarEstado("Configura la URL de Apps Script en SCRIPT_URL", "status-error");
-        return;
-      }
+    async function cargarListaClientes() {
+      mostrarEstado("Cargando clientes...", "status-info");
       try {
-        mostrarEstado("Cargando lista de clientes...", "status-loading");
-        const res = await fetch(SCRIPT_URL);
-        const data = await res.json();
-        if (data.status === "success" && data.clientes) {
-          listaClientes = data.clientes;
-          const datalist = document.getElementById('listaClientes');
-          datalist.innerHTML = "";
-          listaClientes.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.nombre;
-            datalist.appendChild(opt);
-          });
-          manejarCliente();
-          mostrarEstado("", "");
-        }
-      } catch (err) {
-        mostrarEstado("Aviso: No se pudo conectar a la lista. Ingresa el nombre manual.", "status-error");
+        const resp = await fetch(SCRIPT_URL + "?action=getClientes");
+        clientes = await resp.json();
+        const dl = document.getElementById('listaClientes');
+        dl.innerHTML = "";
+        clientes.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.nombre;
+          dl.appendChild(opt);
+        });
+        seleccionarCliente();
+        mostrarEstado("", "");
+      } catch (e) {
+        mostrarEstado("Modo sin conexión rápida", "status-info");
       }
     }
 
-    function manejarCliente() {
+    function seleccionarCliente() {
       const val = document.getElementById('clienteInput').value.trim();
       localStorage.setItem('cliente_temp', val);
-      const match = listaClientes.find(c => c.nombre.toLowerCase() === val.toLowerCase());
-      telefonoSeleccionado = match ? match.telefono : "";
-      validarFormulario();
+      const enc = clientes.find(c => c.nombre.toLowerCase() === val.toLowerCase());
+      telefonoActual = enc ? enc.telefono : "";
+      validar();
     }
 
-    // Compresión en cliente para reducir a ~150KB y no saturar la red 4G ni la RAM
-    function procesarImagen(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      mostrarEstado("Optimizando imagen...", "status-loading");
-      const reader = new FileReader();
-
-      reader.onload = function(evt) {
-        const img = new Image();
-        img.onload = function() {
-          const maxDim = 1200;
-          let w = img.width;
-          let h = img.height;
-
-          if (w > h && w > maxDim) {
-            h = Math.round((h * maxDim) / w);
-            w = maxDim;
-          } else if (h > maxDim) {
-            w = Math.round((w * maxDim) / h);
-            h = maxDim;
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-
-          // Calidad 70%: muy liviana (<150KB) y texto de recibo perfectamente legible
-          fotoBase64Optimizado = canvas.toDataURL('image/jpeg', 0.70);
-
-          const preview = document.getElementById('previewImg');
-          preview.src = fotoBase64Optimizado;
-          preview.style.display = 'block';
-
-          document.getElementById('labelTxt').innerText = "✓ Cambiar foto";
-          mostrarEstado("✓ Foto lista", "status-success");
-          validarFormulario();
-        };
-        img.src = evt.target.result;
-      };
-      reader.readAsDataURL(file);
+    // Cámara dentro del navegador (Cero consumo externo, no se reinicia)
+    async function abrirCamara() {
+      const video = document.getElementById('videoStream');
+      const btnIniciar = document.getElementById('btnIniciar');
+      const btnCapturar = document.getElementById('btnCapturar');
+      
+      try {
+        streamActual = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 }
+          },
+          audio: false
+        });
+        video.srcObject = streamActual;
+        video.style.display = "block";
+        btnIniciar.style.display = "none";
+        btnCapturar.style.display = "inline-flex";
+      } catch (err) {
+        alert("Por favor da permiso a la cámara en el navegador: " + err.message);
+      }
     }
 
-    function validarFormulario() {
-      const clienteValido = document.getElementById('clienteInput').value.trim().length > 0;
-      const fotoValida = fotoBase64Optimizado.length > 0;
-      document.getElementById('btnEnviar').disabled = !(clienteValido && fotoValida);
+    function capturarFoto() {
+      const video = document.getElementById('videoStream');
+      const canvas = document.getElementById('canvasSnapshot');
+      const preview = document.getElementById('fotoPreview');
+      const btnCapturar = document.getElementById('btnCapturar');
+      const btnRepetir = document.getElementById('btnRepetir');
+
+      const maxDim = 1200;
+      let w = video.videoWidth || 1280;
+      let h = video.videoHeight || 720;
+      if (w > h && w > maxDim) {
+        h = Math.round((h * maxDim) / w);
+        w = maxDim;
+      } else if (h > maxDim) {
+        w = Math.round((w * maxDim) / h);
+        h = maxDim;
+      }
+
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+
+      // Comprime a JPEG ultra rápido (~120 KB)
+      base64Comprimido = canvas.toDataURL('image/jpeg', 0.75);
+
+      // Apagamos el stream de video para liberar la RAM por completo
+      if (streamActual) {
+        streamActual.getTracks().forEach(t => t.stop());
+      }
+      video.style.display = "none";
+      btnCapturar.style.display = "none";
+
+      preview.src = base64Comprimido;
+      preview.style.display = "block";
+      btnRepetir.style.display = "inline-flex";
+
+      validar();
     }
 
-    // Envío con reintentos automáticos para evitar caídas de red móvil (ERR_NETWORK_CHANGED)
-    async function enviarComprobante() {
+    function reiniciarCamara() {
+      base64Comprimido = "";
+      document.getElementById('fotoPreview').style.display = "none";
+      document.getElementById('btnRepetir').style.display = "none";
+      abrirCamara();
+      validar();
+    }
+
+    function validar() {
+      const nom = document.getElementById('clienteInput').value.trim();
+      document.getElementById('btnEnviar').disabled = !(nom !== "" && base64Comprimido !== "");
+    }
+
+    async function enviar() {
       const btn = document.getElementById('btnEnviar');
       const cliente = document.getElementById('clienteInput').value.trim();
-
       btn.disabled = true;
-      mostrarEstado("Subiendo comprobante a Drive...", "status-loading");
+      mostrarEstado("⏳ Guardando en Drive...", "status-info");
 
       const payload = {
         cliente: cliente,
-        telefono: telefonoSeleccionado,
-        fotoBase64: fotoBase64Optimizado
+        telefono: telefonoActual,
+        fotoBase64: base64Comprimido
       };
 
-      const MAX_INTENTOS = 3;
-      let exito = false;
-
-      for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+      // Envío robusto con 3 reintentos si parpadea la red 4G
+      let intentos = 0;
+      while (intentos < 3) {
         try {
-          if (intento > 1) {
-            mostrarEstado(`Reintentando conexión (${intento}/${MAX_INTENTOS})...`, "status-loading");
-          }
-
-          // Se usa text/plain para evitar que Apps Script bloquee con preflight OPTIONS de CORS
-          const resp = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          intentos++;
+          const res = await fetch(SCRIPT_URL, {
+            method: "POST",
             body: JSON.stringify(payload)
           });
+          const data = await res.json();
 
-          const resultado = await resp.json();
-
-          if (resultado.status === "success") {
-            exito = true;
-            mostrarEstado("✓ Guardado. Abriendo WhatsApp...", "status-success");
+          if (data.status === "ok") {
+            mostrarEstado("✓ ¡Guardado! Abriendo WhatsApp...", "status-ok");
             localStorage.removeItem('cliente_temp');
-
-            // Abrir WhatsApp directamente
-            window.location.href = resultado.urlWhatsApp;
-
-            setTimeout(() => {
-              // Limpiar para el siguiente
-              document.getElementById('clienteInput').value = "";
-              document.getElementById('previewImg').style.display = "none";
-              document.getElementById('labelTxt').innerText = "📷 Tocar para tomar foto";
-              fotoBase64Optimizado = "";
-              btn.disabled = true;
-              mostrarEstado("", "");
-            }, 2500);
-
-            break;
+            
+            // Abrir WhatsApp de inmediato
+            window.location.href = data.urlWhatsApp;
+            return;
           } else {
-            throw new Error(resultado.message || "Error en el servidor");
+            throw new Error(data.message || "Error del servidor");
           }
-
         } catch (err) {
-          console.warn(`Fallo intento ${intento}:`, err);
-          if (intento === MAX_INTENTOS) {
-            mostrarEstado("Error al subir comprobante. Revisa tu conexión e intenta de nuevo.", "status-error");
+          if (intentos >= 3) {
+            mostrarEstado("Error de red al subir. Intenta de nuevo.", "status-error");
             btn.disabled = false;
           } else {
-            await new Promise(r => setTimeout(r, 1200)); // Espera antes de reintentar
+            mostrarEstado("Reconectando red (intento " + (intentos + 1) + "/3)...", "status-info");
+            await new Promise(r => setTimeout(r, 1200));
           }
         }
       }
@@ -244,7 +290,7 @@
 
     function mostrarEstado(txt, clase) {
       const box = document.getElementById('statusBox');
-      box.className = "status-box " + clase;
+      box.className = clase;
       box.innerText = txt;
     }
   </script>
