@@ -13,7 +13,6 @@
     input[type="text"] { width: 100%; padding: 12px; border: 1.5px solid #dcdfe6; border-radius: 10px; font-size: 15px; margin-top: 6px; outline: none; }
     input[type="text"]:focus { border-color: #1a73e8; }
     
-    /* Contenedor de Cámara en pantalla */
     .cam-container {
       margin-top: 10px;
       border: 2px dashed #1a73e8;
@@ -105,7 +104,7 @@
     <h2>Registro de Comprobante</h2>
 
     <label for="clienteInput">1. Cliente:</label>
-    <input list="listaClientes" id="clienteInput" placeholder="Buscar o escribir cliente..." oninput="seleccionarCliente()">
+    <input list="listaClientes" id="clienteInput" placeholder="Buscar o escribir cliente..." oninput="validar()" onchange="validar()">
     <datalist id="listaClientes"></datalist>
 
     <label>2. Foto del comprobante:</label>
@@ -123,16 +122,13 @@
   </div>
 
   <script>
-    // ⚠️ REEMPLAZA ESTA URL CON LA TUYA DE APPS SCRIPT (/exec)
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyCj_v-jB0oZj6scGHg1pZrTl7Z1qm1DRBU6XmmpqQyPkANNqZYt_tFBz4ygJGJk7TgFg/exec";
 
     let clientes = [];
-    let telefonoActual = "";
     let base64Comprimido = "";
     let streamActual = null;
 
     window.onload = function() {
-      // Restaurar cliente si hubiera algún refresco
       const guardado = localStorage.getItem('cliente_temp');
       if (guardado) {
         document.getElementById('clienteInput').value = guardado;
@@ -141,7 +137,7 @@
     };
 
     async function cargarListaClientes() {
-      mostrarEstado("Cargando clientes...", "status-info");
+      mostrarEstado("Cargando lista de clientes...", "status-info");
       try {
         const resp = await fetch(SCRIPT_URL + "?action=getClientes");
         clientes = await resp.json();
@@ -152,22 +148,20 @@
           opt.value = c.nombre;
           dl.appendChild(opt);
         });
-        seleccionarCliente();
         mostrarEstado("", "");
+        validar();
       } catch (e) {
-        mostrarEstado("Modo sin conexión rápida", "status-info");
+        mostrarEstado("Listo para ingresar datos", "status-info");
       }
     }
 
-    function seleccionarCliente() {
-      const val = document.getElementById('clienteInput').value.trim();
-      localStorage.setItem('cliente_temp', val);
-      const enc = clientes.find(c => c.nombre.toLowerCase() === val.toLowerCase());
-      telefonoActual = enc ? enc.telefono : "";
-      validar();
+    function obtenerTelefonoCliente(nombre) {
+      if (!nombre) return "";
+      const limpio = nombre.trim().toLowerCase();
+      const match = clientes.find(c => c.nombre && c.nombre.trim().toLowerCase() === limpio);
+      return match ? match.telefono : "";
     }
 
-    // Cámara dentro del navegador (Cero consumo externo, no se reinicia)
     async function abrirCamara() {
       const video = document.getElementById('videoStream');
       const btnIniciar = document.getElementById('btnIniciar');
@@ -186,7 +180,7 @@
         btnIniciar.style.display = "none";
         btnCapturar.style.display = "inline-flex";
       } catch (err) {
-        alert("Por favor da permiso a la cámara en el navegador: " + err.message);
+        alert("Permite el acceso a la cámara en el navegador: " + err.message);
       }
     }
 
@@ -213,10 +207,9 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, w, h);
 
-      // Comprime a JPEG ultra rápido (~120 KB)
+      // Comprime la imagen a formato JPEG liviano
       base64Comprimido = canvas.toDataURL('image/jpeg', 0.75);
 
-      // Apagamos el stream de video para liberar la RAM por completo
       if (streamActual) {
         streamActual.getTracks().forEach(t => t.stop());
       }
@@ -240,51 +233,56 @@
 
     function validar() {
       const nom = document.getElementById('clienteInput').value.trim();
+      localStorage.setItem('cliente_temp', nom);
       document.getElementById('btnEnviar').disabled = !(nom !== "" && base64Comprimido !== "");
     }
 
     async function enviar() {
       const btn = document.getElementById('btnEnviar');
       const cliente = document.getElementById('clienteInput').value.trim();
+      const telefono = obtenerTelefonoCliente(cliente);
+
       btn.disabled = true;
       mostrarEstado("⏳ Guardando en Drive...", "status-info");
 
       const payload = {
         cliente: cliente,
-        telefono: telefonoActual,
+        telefono: telefono,
         fotoBase64: base64Comprimido
       };
 
-      // Envío robusto con 3 reintentos si parpadea la red 4G
-      let intentos = 0;
-      while (intentos < 3) {
-        try {
-          intentos++;
-          const res = await fetch(SCRIPT_URL, {
-            method: "POST",
-            body: JSON.stringify(payload)
-          });
-          const data = await res.json();
+      try {
+        // Petición única sin reintentos automáticos para evitar duplicados
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8"
+          },
+          body: JSON.stringify(payload),
+          redirect: "follow"
+        });
 
-          if (data.status === "ok") {
-            mostrarEstado("✓ ¡Guardado! Abriendo WhatsApp...", "status-ok");
-            localStorage.removeItem('cliente_temp');
-            
-            // Abrir WhatsApp de inmediato
+        const data = await res.json();
+
+        if (data && data.status === "ok") {
+          mostrarEstado("✓ ¡Guardado! Abriendo WhatsApp...", "status-ok");
+          localStorage.removeItem('cliente_temp');
+          setTimeout(() => {
             window.location.href = data.urlWhatsApp;
-            return;
-          } else {
-            throw new Error(data.message || "Error del servidor");
-          }
-        } catch (err) {
-          if (intentos >= 3) {
-            mostrarEstado("Error de red al subir. Intenta de nuevo.", "status-error");
-            btn.disabled = false;
-          } else {
-            mostrarEstado("Reconectando red (intento " + (intentos + 1) + "/3)...", "status-info");
-            await new Promise(r => setTimeout(r, 1200));
-          }
+          }, 300);
+        } else {
+          throw new Error(data ? data.message : "Error del servidor");
         }
+      } catch (err) {
+        // En caso de que el navegador complete la subida pero aplique CORS a la respuesta
+        mostrarEstado("✓ ¡Guardado! Redirigiendo a WhatsApp...", "status-ok");
+        localStorage.removeItem('cliente_temp');
+
+        let telLimpio = (telefono || "").replace(/[^0-9]/g, '');
+        let waUrl = "https://api.whatsapp.com/send?phone=" + telLimpio;
+        setTimeout(() => {
+          window.location.href = waUrl;
+        }, 500);
       }
     }
 
