@@ -3,24 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Registro de Comprobantes</title>
+  <title>Subir Comprobante</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background: #f0f2f5; margin: 0; padding: 16px; display: flex; justify-content: center; }
     .card { background: #ffffff; width: 100%; max-width: 440px; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
     h2 { color: #1a73e8; margin: 0 0 16px 0; text-align: center; font-size: 20px; }
     label { font-weight: 600; font-size: 13px; color: #444; margin-top: 12px; display: block; }
-    input[type="text"] { width: 100%; padding: 12px; border: 1.5px solid #dcdfe6; border-radius: 10px; font-size: 15px; margin-top: 6px; outline: none; }
-    input[type="text"]:focus { border-color: #1a73e8; }
-    
+    input[type="text"], textarea { 
+      width: 100%; 
+      padding: 12px; 
+      border: 1.5px solid #dcdfe6; 
+      border-radius: 10px; 
+      font-size: 14px; 
+      margin-top: 6px; 
+      outline: none; 
+      font-family: inherit;
+    }
+    input[type="text"]:focus, textarea:focus { border-color: #1a73e8; }
+    textarea { resize: vertical; min-height: 60px; }
+
     .cam-container {
-      margin-top: 10px;
+      margin-top: 12px;
       border: 2px dashed #1a73e8;
       border-radius: 12px;
       background: #111;
       position: relative;
       overflow: hidden;
-      min-height: 240px;
+      min-height: 250px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -40,7 +50,7 @@
       display: none;
     }
     canvas#canvasSnapshot { display: none; }
-    
+
     .cam-btn {
       padding: 12px 20px;
       border-radius: 25px;
@@ -78,9 +88,8 @@
       padding: 15px;
       font-size: 16px;
       font-weight: 700;
-      margin-top: 18px;
+      margin-top: 20px;
       cursor: pointer;
-      transition: background 0.2s;
     }
     button#btnEnviar:disabled { background: #c2eed1; cursor: not-allowed; }
 
@@ -103,11 +112,13 @@
   <div class="card">
     <h2>Registro de Comprobante</h2>
 
-    <label for="clienteInput">1. Cliente:</label>
-    <input list="listaClientes" id="clienteInput" placeholder="Buscar o escribir cliente..." oninput="validar()" onchange="validar()">
-    <datalist id="listaClientes"></datalist>
+    <label for="clienteInput">Cliente / Referencia (Opcional):</label>
+    <input type="text" id="clienteInput" placeholder="Ej: Varinia, Pedido 102...">
 
-    <label>2. Foto del comprobante:</label>
+    <label for="mensajeInput">Mensaje para WhatsApp (Opcional):</label>
+    <textarea id="mensajeInput" placeholder="Escribe un mensaje opcional para acompañar la foto..."></textarea>
+
+    <label>Foto del comprobante:</label>
     <div class="cam-container" id="camBox">
       <button type="button" class="cam-btn btn-abrir" id="btnIniciar" onclick="abrirCamara()">📷 Encender Cámara</button>
       <video id="videoStream" autoplay playsinline muted></video>
@@ -117,52 +128,15 @@
       <button type="button" class="cam-btn btn-repetir" id="btnRepetir" onclick="reiniciarCamara()">🔄 Repetir</button>
     </div>
 
-    <button type="button" id="btnEnviar" disabled onclick="enviar()">Guardar y Enviar por WhatsApp</button>
+    <button type="button" id="btnEnviar" disabled onclick="enviar()">Guardar y Seleccionar en WhatsApp</button>
     <div id="statusBox"></div>
   </div>
 
   <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyCj_v-jB0oZj6scGHg1pZrTl7Z1qm1DRBU6XmmpqQyPkANNqZYt_tFBz4ygJGJk7TgFg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyJVTsMtLzcSNSS0I4nLMeEn7vLFwpgofotvXdTwfYQjE_xTFqYr5-YXtKNorHHvzxjDg/exec";
 
-    let clientes = [];
     let base64Comprimido = "";
     let streamActual = null;
-
-    window.onload = function() {
-      const guardado = localStorage.getItem('cliente_temp');
-      if (guardado) {
-        document.getElementById('clienteInput').value = guardado;
-      }
-      cargarListaClientes();
-    };
-
-    async function cargarListaClientes() {
-      mostrarEstado("Cargando lista de clientes...", "status-info");
-      try {
-        const resp = await fetch(SCRIPT_URL + "?action=getClientes");
-        clientes = await resp.json();
-        
-        const dl = document.getElementById('listaClientes');
-        dl.innerHTML = "";
-        clientes.forEach(c => {
-          const opt = document.createElement('option');
-          opt.value = c.nombre;
-          dl.appendChild(opt);
-        });
-        mostrarEstado("", "");
-        validar();
-      } catch (e) {
-        console.warn("Aviso:", e);
-        mostrarEstado("", "");
-      }
-    }
-
-    function obtenerTelefonoCliente(nombre) {
-      if (!nombre) return "";
-      const limpio = nombre.trim().toLowerCase();
-      const match = clientes.find(c => c.nombre && c.nombre.trim().toLowerCase() === limpio);
-      return match ? match.telefono : "";
-    }
 
     async function abrirCamara() {
       const video = document.getElementById('videoStream');
@@ -218,34 +192,27 @@
       preview.style.display = "block";
       btnRepetir.style.display = "inline-flex";
 
-      validar();
+      document.getElementById('btnEnviar').disabled = false;
     }
 
     function reiniciarCamara() {
       base64Comprimido = "";
       document.getElementById('fotoPreview').style.display = "none";
       document.getElementById('btnRepetir').style.display = "none";
+      document.getElementById('btnEnviar').disabled = true;
       abrirCamara();
-      validar();
-    }
-
-    function validar() {
-      const nom = document.getElementById('clienteInput').value.trim();
-      localStorage.setItem('cliente_temp', nom);
-      document.getElementById('btnEnviar').disabled = !(nom !== "" && base64Comprimido !== "");
     }
 
     async function enviar() {
       const btn = document.getElementById('btnEnviar');
       const cliente = document.getElementById('clienteInput').value.trim();
-      const telefono = obtenerTelefonoCliente(cliente);
+      const customMsg = document.getElementById('mensajeInput').value.trim();
 
       btn.disabled = true;
       mostrarEstado("⏳ Guardando en Drive...", "status-info");
 
       const payload = {
         cliente: cliente,
-        telefono: telefono,
         fotoBase64: base64Comprimido
       };
 
@@ -262,18 +229,25 @@
 
         if (data && data.status === "ok") {
           mostrarEstado("✓ ¡Guardado! Abriendo WhatsApp...", "status-ok");
-          localStorage.removeItem('cliente_temp');
+          
+          let textoFinal = "";
+          if (customMsg !== "") {
+            textoFinal = customMsg + "\n\n📄 " + data.urlFoto;
+          } else {
+            textoFinal = "📄 Comprobante: " + data.urlFoto;
+          }
+          
+          const waUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(textoFinal);
           setTimeout(() => {
-            window.location.href = data.urlWhatsApp;
+            window.location.href = waUrl;
           }, 300);
         } else {
           throw new Error(data ? data.message : "Error");
         }
       } catch (err) {
-        mostrarEstado("✓ ¡Comprobante procesado! Abriendo WhatsApp...", "status-ok");
-        localStorage.removeItem('cliente_temp');
-        let telLimpio = (telefono || "").replace(/[^0-9]/g, '');
-        let waUrl = "https://api.whatsapp.com/send?phone=" + telLimpio;
+        mostrarEstado("✓ ¡Listo! Abriendo WhatsApp...", "status-ok");
+        let fallbackMsg = customMsg !== "" ? customMsg : "Comprobante de venta adjunto.";
+        const waUrl = "https://api.whatsapp.com/send?text=" + encodeURIComponent(fallbackMsg);
         setTimeout(() => {
           window.location.href = waUrl;
         }, 500);
