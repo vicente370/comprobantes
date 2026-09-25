@@ -1,127 +1,4 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Registro de Comprobantes</title>
-  <style>
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #f0f2f5; margin: 0; padding: 16px; display: flex; justify-content: center; }
-    .card { background: #ffffff; width: 100%; max-width: 440px; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    h2 { color: #1a73e8; margin: 0 0 16px 0; text-align: center; font-size: 20px; }
-    label { font-weight: 600; font-size: 13px; color: #444; margin-top: 12px; display: block; }
-    input[type="text"] { width: 100%; padding: 12px; border: 1.5px solid #dcdfe6; border-radius: 10px; font-size: 15px; margin-top: 6px; outline: none; }
-    input[type="text"]:focus { border-color: #1a73e8; }
-    
-    .cam-container {
-      margin-top: 10px;
-      border: 2px dashed #1a73e8;
-      border-radius: 12px;
-      background: #111;
-      position: relative;
-      overflow: hidden;
-      min-height: 240px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    video#videoStream {
-      width: 100%;
-      height: 260px;
-      object-fit: cover;
-      display: none;
-    }
-    img#fotoPreview {
-      width: 100%;
-      height: 260px;
-      object-fit: contain;
-      background: #000;
-      display: none;
-    }
-    canvas#canvasSnapshot { display: none; }
-    
-    .cam-btn {
-      padding: 12px 20px;
-      border-radius: 25px;
-      border: none;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .btn-abrir { background: #1a73e8; color: white; margin: 20px 0; }
-    .btn-disparo {
-      position: absolute;
-      bottom: 12px;
-      background: #ffffff;
-      color: #1a73e8;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-      display: none;
-    }
-    .btn-repetir {
-      position: absolute;
-      bottom: 12px;
-      background: rgba(255,255,255,0.9);
-      color: #333;
-      display: none;
-    }
-
-    button#btnEnviar {
-      width: 100%;
-      background: #25D366;
-      color: white;
-      border: none;
-      border-radius: 10px;
-      padding: 15px;
-      font-size: 16px;
-      font-weight: 700;
-      margin-top: 18px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    button#btnEnviar:disabled { background: #c2eed1; cursor: not-allowed; }
-
-    #statusBox {
-      margin-top: 14px;
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 13px;
-      text-align: center;
-      display: none;
-      font-weight: 600;
-    }
-    .status-info { background: #e8f0fe; color: #1a73e8; display: block !important; }
-    .status-ok { background: #e6f4ea; color: #137333; display: block !important; }
-    .status-error { background: #fce8e6; color: #c5221f; display: block !important; }
-  </style>
-</head>
-<body>
-
-  <div class="card">
-    <h2>Registro de Comprobante</h2>
-
-    <label for="clienteInput">1. Cliente:</label>
-    <input list="listaClientes" id="clienteInput" placeholder="Buscar o escribir cliente..." oninput="validar()" onchange="validar()">
-    <datalist id="listaClientes"></datalist>
-
-    <label>2. Foto del comprobante:</label>
-    <div class="cam-container" id="camBox">
-      <button type="button" class="cam-btn btn-abrir" id="btnIniciar" onclick="abrirCamara()">📷 Encender Cámara</button>
-      <video id="videoStream" autoplay playsinline muted></video>
-      <img id="fotoPreview" alt="Vista previa">
-      <canvas id="canvasSnapshot"></canvas>
-      <button type="button" class="cam-btn btn-disparo" id="btnCapturar" onclick="capturarFoto()">⚪ Tomar Foto</button>
-      <button type="button" class="cam-btn btn-repetir" id="btnRepetir" onclick="reiniciarCamara()">🔄 Repetir</button>
-    </div>
-
-    <button type="button" id="btnEnviar" disabled onclick="enviar()">Guardar y Enviar por WhatsApp</button>
-    <div id="statusBox"></div>
-  </div>
-
-  <script>
+<script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyCj_v-jB0oZj6scGHg1pZrTl7Z1qm1DRBU6XmmpqQyPkANNqZYt_tFBz4ygJGJk7TgFg/exec";
 
     let clientes = [];
@@ -141,6 +18,7 @@
       try {
         const resp = await fetch(SCRIPT_URL + "?action=getClientes");
         clientes = await resp.json();
+        
         const dl = document.getElementById('listaClientes');
         dl.innerHTML = "";
         clientes.forEach(c => {
@@ -151,7 +29,8 @@
         mostrarEstado("", "");
         validar();
       } catch (e) {
-        mostrarEstado("Listo para ingresar datos", "status-info");
+        console.warn("No se pudo cargar clientes en automático:", e);
+        mostrarEstado("", "");
       }
     }
 
@@ -169,10 +48,7 @@
       
       try {
         streamActual = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 }
-          },
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } },
           audio: false
         });
         video.srcObject = streamActual;
@@ -207,7 +83,6 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, w, h);
 
-      // Comprime la imagen a formato JPEG liviano
       base64Comprimido = canvas.toDataURL('image/jpeg', 0.75);
 
       if (streamActual) {
@@ -252,14 +127,12 @@
       };
 
       try {
-        // Petición única sin reintentos automáticos para evitar duplicados
         const res = await fetch(SCRIPT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "text/plain;charset=utf-8"
           },
-          body: JSON.stringify(payload),
-          redirect: "follow"
+          body: JSON.stringify(payload)
         });
 
         const data = await res.json();
@@ -271,13 +144,12 @@
             window.location.href = data.urlWhatsApp;
           }, 300);
         } else {
-          throw new Error(data ? data.message : "Error del servidor");
+          throw new Error(data ? data.message : "Error");
         }
       } catch (err) {
-        // En caso de que el navegador complete la subida pero aplique CORS a la respuesta
-        mostrarEstado("✓ ¡Guardado! Redirigiendo a WhatsApp...", "status-ok");
+        // En caso de que se complete en segundo plano
+        mostrarEstado("✓ ¡Comprobante procesado! Abriendo WhatsApp...", "status-ok");
         localStorage.removeItem('cliente_temp');
-
         let telLimpio = (telefono || "").replace(/[^0-9]/g, '');
         let waUrl = "https://api.whatsapp.com/send?phone=" + telLimpio;
         setTimeout(() => {
@@ -292,5 +164,3 @@
       box.innerText = txt;
     }
   </script>
-</body>
-</html>
